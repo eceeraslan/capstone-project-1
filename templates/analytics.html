@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% set active_page = 'analytics' %}
+{% block content %}
+<style>
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px;}
+.stat-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:16px;text-align:center;box-shadow:0 1px 4px var(--shadow);}
+.stat-num{font-size:28px;font-weight:800;color:var(--navy-mid);}
+.stat-lbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--subtext);margin-top:4px;}
+.event-row{display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px;}
+.event-row:last-child{border-bottom:none;}
+.bar-wrap{background:var(--sky-pale);border-radius:8px;height:8px;flex:1;margin:0 10px;overflow:hidden;}
+.bar-fill{height:100%;background:var(--navy-mid);border-radius:8px;}
+.metric-hint{font-size:11px;color:var(--subtext);padding:0 12px 8px;}
+</style>
+
+<div class="page-hdr">
+  <h2>📈 System Analytics</h2>
+  <p>Syllabus kullanımı, bilgi erişimi ve AI etkileşim verileri</p>
+</div>
+
+<div class="stat-grid" role="list" aria-label="Özet istatistikler">
+  <div class="stat-card" role="listitem">
+    <div class="stat-num">{{ total_syllabus_views }}</div>
+    <div class="stat-lbl">Toplam Syllabus Görüntüleme</div>
+  </div>
+  <div class="stat-card" role="listitem">
+    <div class="stat-num">{{ most_viewed | length }}</div>
+    <div class="stat-lbl">Görüntülenen Ders Sayısı</div>
+  </div>
+  <div class="stat-card" role="listitem">
+    <div class="stat-num">{{ ai_usage_total }}</div>
+    <div class="stat-lbl">AI Etkileşimi</div>
+  </div>
+</div>
+
+{# ── Metrik 1: En çok görüntülenen syllabuslar ── #}
+<div class="sec-card" style="margin-bottom:18px;">
+  <div class="sec-card-hdr">En Çok Görüntülenen Syllabuslar</div>
+  <div class="metric-hint">Hangi dersin syllabus'u öğrenciler tarafından ne kadar görüntülendi.</div>
+  <div style="padding:4px 0;">
+    {% if most_viewed %}
+    {% set max_v = most_viewed | map(attribute='cnt') | max %}
+    {% for m in most_viewed %}
+    <div class="event-row">
+      <span style="min-width:160px;color:var(--text);"><strong>{{ m.code }}</strong> — {{ m.name }}</span>
+      <div class="bar-wrap" role="img" aria-label="{{ m.code }}: {{ m.cnt }} görüntüleme">
+        <div class="bar-fill" style="width:{{ [m.cnt / max_v * 100, 100] | min | round | int }}%;"></div>
+      </div>
+      <span style="font-weight:700;min-width:30px;text-align:right;color:var(--navy-mid);">{{ m.cnt }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="metric-hint">Henüz syllabus görüntüleme verisi yok.</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Metrik 2: En çok erişilen bilgi türü ── #}
+<div class="sec-card" style="margin-bottom:18px;">
+  <div class="sec-card-hdr">En Çok Erişilen Bilgi Türü</div>
+  <div class="metric-hint">Kullanıcılar derslerde en çok hangi tür bilgiye bakıyor.</div>
+  <div style="padding:4px 0;">
+    {% if info_access %}
+    {% set max_i = info_access | map(attribute='cnt') | max %}
+    {% for i in info_access %}
+    <div class="event-row">
+      <span style="min-width:160px;color:var(--text);">{{ i.label }}</span>
+      <div class="bar-wrap" role="img" aria-label="{{ i.label }}: {{ i.cnt }}">
+        <div class="bar-fill" style="width:{{ [i.cnt / max_i * 100, 100] | min | round | int }}%;"></div>
+      </div>
+      <span style="font-weight:700;min-width:30px;text-align:right;color:var(--navy-mid);">{{ i.cnt }}</span>
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="metric-hint">Henüz erişim verisi yok.</div>
+    {% endif %}
+  </div>
+</div>
+
+{# ── Son aktiviteler ── #}
+{% if recent %}
+{% set EVENT_LABELS = {
+  "syllabus_view": "Syllabus görüntüleme",
+  "ai_chat_question": "AI'a soru soruldu",
+  "semantic_search": "AI akıllı arama",
+  "ai_format_section": "AI ile biçimlendirme",
+  "ai_check_syllabus": "AI eksik bileşen kontrolü",
+  "syllabus_extract": "Dosyadan syllabus çıkarma",
+  "syllabus_apply_extracted": "Çıkarılan içerik uygulandı",
+  "syllabus_edit": "Syllabus düzenlendi",
+  "deadline_add": "Teslim tarihi eklendi",
+  "announcement_post": "Duyuru paylaşıldı",
+  "feedback_submit": "Geri bildirim gönderildi",
+  "search": "Arama yapıldı",
+  "page_view": "Sayfa görüntüleme"
+} %}
+<div class="sec-card">
+  <div class="sec-card-hdr">Son Aktiviteler</div>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;" role="table" aria-label="Son aktiviteler">
+      <thead>
+        <tr style="background:var(--sky-pale);">
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--navy-mid);" scope="col">Kullanıcı</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--navy-mid);" scope="col">İşlem</th>
+          <th style="padding:8px 12px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px;color:var(--navy-mid);" scope="col">Zaman</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in recent %}
+        <tr style="border-bottom:1px solid var(--border);">
+          <td style="padding:8px 12px;color:var(--text);">{{ r.username }}</td>
+          <td style="padding:8px 12px;color:var(--navy-mid);font-weight:600;">{{ EVENT_LABELS.get(r.event_type, r.event_type) }}</td>
+          <td style="padding:8px 12px;color:var(--subtext);">{{ r.created_at[:16] if r.created_at else '' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="empty-state"><div class="big">📈</div>Henüz veri yok.</div>
+{% endif %}
+{% endblock %}

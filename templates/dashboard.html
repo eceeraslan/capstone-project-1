@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% set active_page = 'dashboard' %}
+{% block content %}
+
+<!-- Greeting widget -->
+<div class="greet-bar">
+  <div class="greet-left">
+    <div class="greet-title" id="greet-text">Hello, {{ user.full_name or user.username }}</div>
+    <div class="greet-sub">{{ user.role | capitalize }} · {{ courses | length }} course{{ 's' if courses | length != 1 else '' }}</div>
+  </div>
+  <div class="greet-stats">
+    <div class="greet-stat {% if deadlines_this_week > 0 %}greet-stat-warn{% endif %}">
+      <span class="greet-stat-num">{{ deadlines_this_week }}</span>
+      <span class="greet-stat-lbl">deadline{{ 's' if deadlines_this_week != 1 else '' }} this week</span>
+    </div>
+    <div class="greet-stat">
+      <span class="greet-stat-num">{{ stat_count }}</span>
+      <span class="greet-stat-lbl">{% if user.role == 'student' %}announcement{{ 's' if stat_count != 1 else '' }}{% else %}student{{ 's' if stat_count != 1 else '' }}{% endif %}</span>
+    </div>
+    <div class="greet-stat">
+      <span class="greet-stat-num">{{ courses | length }}</span>
+      <span class="greet-stat-lbl">course{{ 's' if courses | length != 1 else '' }}</span>
+    </div>
+  </div>
+</div>
+
+<div class="dashboard-layout">
+  <div style="display:flex;flex-direction:column;min-height:0;gap:16px;">
+
+    <div style="position:relative;">
+      <input id="dash-search" type="text" placeholder="Search courses, deadlines, announcements…"
+        autocomplete="off"
+        style="width:100%;padding:12px 20px 12px 44px;border-radius:12px;border:2px solid var(--border);background:var(--card);color:var(--text);font-size:14px;outline:none;box-shadow:0 2px 8px var(--shadow);transition:border-color .2s;"
+        onfocus="this.style.borderColor='var(--sky)'" onblur="this.style.borderColor='var(--border)'">
+      <span style="position:absolute;left:14px;top:50%;transform:translateY(-50%);font-size:18px;pointer-events:none;">🔍</span>
+      <div id="dash-results" style="display:none;position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px var(--shadow-strong);z-index:200;max-height:360px;overflow-y:auto;"></div>
+    </div>
+
+    {% set cid = current_course.id if current_course else 0 %}
+    <div class="tiles-grid" style="flex:1;">
+      <a href="/course/{{ cid }}/syllabus" class="tile tile-1 tile-tall">
+        <div class="tile-label">VIEW<br>SYLLABUS</div>
+        <div class="tile-arrow">→</div>
+      </a>
+
+      {% if user.role == 'student' %}
+        <a href="/course/{{ cid }}/deadlines" class="tile tile-2">
+          <div class="tile-label">UPCOMING<br>DEADLINES</div>
+        </a>
+        <a href="/course/{{ cid }}/announcements" class="tile tile-3">
+          <div class="tile-label">ANNOUNCEMENTS</div>
+        </a>
+        <a href="/course/{{ cid }}/search" class="tile tile-4">
+          <div class="tile-plus">+</div>
+          <div class="tile-label">SEARCH<br>SYLLABUS</div>
+        </a>
+        <a href="/all-policies" class="tile tile-5">
+          <div class="tile-plus">+</div>
+          <div class="tile-label">COURSE<br>POLICIES</div>
+        </a>
+      {% else %}
+        <a href="/course/{{ cid }}/deadlines" class="tile tile-2">
+          <div class="tile-plus">+</div>
+          <div class="tile-label">UPDATE<br>DEADLINES</div>
+        </a>
+        <a href="/course/{{ cid }}/announcements" class="tile tile-3">
+          <div class="tile-plus">+</div>
+          <div class="tile-label">POST<br>ANNOUNCEMENT</div>
+        </a>
+        <a href="/course/{{ cid }}/edit" class="tile tile-4">
+          <div class="tile-plus">+</div>
+          <div class="tile-label">EDIT<br>SYLLABUS</div>
+        </a>
+        <a href="/all-policies" class="tile tile-5">
+          <div class="tile-plus">+</div>
+          <div class="tile-label">COURSE<br>POLICIES</div>
+        </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="side-tiles" style="display:flex;flex-direction:column;">
+    <div class="countdown-card" style="flex:1;overflow-y:auto;">
+      <h3>⏳ Upcoming Deadlines</h3>
+      {% if upcoming %}
+        {% for d in upcoming %}
+          <a href="/course/{{ d.course_id }}/deadlines" class="countdown-item" style="text-decoration:none;">
+            <div class="countdown-days {% if d.days <= 3 %}cd-soon{% elif d.days <= 10 %}cd-near{% else %}cd-far{% endif %}">
+              <span class="num">{{ d.days }}</span>
+              <span class="lbl">{{ 'day' if d.days == 1 else 'days' }}</span>
+            </div>
+            <div class="countdown-meta">
+              <div class="countdown-title">{{ d.title }}</div>
+              <div class="countdown-sub">{{ d.course_code }} · {{ d.due_date }}</div>
+            </div>
+          </a>
+        {% endfor %}
+      {% else %}
+        <div class="countdown-empty">No upcoming deadlines 🎉</div>
+      {% endif %}
+    </div>
+    <a href="/account" class="side-tile">👤 Account</a>
+    <a href="/course-schedule" class="side-tile">📅 Course Schedule</a>
+    <a href="/exam-schedule" class="side-tile">📝 Exam Schedule</a>
+
+    {% if user.role == 'student' and courses %}
+    <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:16px 16px 12px;">
+      <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.8px;color:var(--subtext);margin-bottom:10px;">My Courses</div>
+      {% if user.department %}
+      <div style="font-size:11px;color:var(--navy-mid);font-weight:600;margin-bottom:10px;padding:4px 8px;background:var(--sky-pale);border-radius:6px;">
+        🎓 {{ user.department }}
+      </div>
+      {% endif %}
+      {% for c in courses %}
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);">
+        <div style="min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:var(--text);">{{ c.code }}</div>
+          <div style="font-size:10px;color:var(--subtext);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:130px;">{{ c.course_type or '' }}</div>
+        </div>
+        <button type="button"
+          onclick="confirmUnenroll('{{ c.id }}', '{{ c.code | replace("'", "\\'") }}')"
+          style="background:none;border:1px solid var(--border);border-radius:6px;padding:3px 7px;font-size:10px;color:var(--subtext);cursor:pointer;flex-shrink:0;"
+          title="Remove this course">✕ Drop</button>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+function confirmUnenroll(courseId, courseCode) {
+  showConfirm({
+    title:   'Drop Course?',
+    body:    'You will be removed from ' + courseCode + '. You can re-enroll later if needed.',
+    icon:    '🎓',
+    okLabel: 'Drop Course',
+    onConfirm: function() {
+      var f = document.createElement('form');
+      f.method = 'POST';
+      f.action = '/course/' + courseId + '/unenroll';
+      document.body.appendChild(f);
+      f.submit();
+    }
+  });
+}
+</script>
+
+<script>
+(function(){
+  const input = document.getElementById('dash-search');
+  const box   = document.getElementById('dash-results');
+  let timer;
+  const tagColors = {Course:'#1565C0', Syllabus:'#2E7D32', Deadline:'#C62828', Announcement:'#E65100'};
+
+  input.addEventListener('input', function(){
+    clearTimeout(timer);
+    const q = this.value.trim();
+    if(q.length < 2){ box.style.display='none'; return; }
+    timer = setTimeout(() => {
+      fetch('/api/search?q=' + encodeURIComponent(q))
+        .then(r => r.json())
+        .then(data => {
+          if(!data.results.length){
+            box.innerHTML = '<div style="padding:16px;color:var(--subtext);text-align:center;font-size:13px;">No results found</div>';
+          } else {
+            box.innerHTML = data.results.map(r => `
+              <a href="${r.url}" style="display:flex;align-items:center;gap:12px;padding:10px 16px;text-decoration:none;color:var(--text);border-bottom:1px solid var(--border);"
+                onmouseover="this.style.background='var(--sky-pale)'" onmouseout="this.style.background=''">
+                <span style="font-size:10px;font-weight:700;color:#fff;background:${tagColors[r.tag]||'#555'};border-radius:5px;padding:2px 7px;white-space:nowrap;">${r.tag}</span>
+                <div style="min-width:0;">
+                  <div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.title}</div>
+                  <div style="font-size:11px;color:var(--subtext);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${r.sub}</div>
+                </div>
+              </a>`).join('');
+          }
+          box.style.display = 'block';
+        });
+    }, 250);
+  });
+
+  document.addEventListener('click', function(e){
+    if(!input.contains(e.target) && !box.contains(e.target)) box.style.display='none';
+  });
+})();
+</script>
+
+<script>
+(function(){
+  var h = new Date().getHours();
+  var greet = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+  var el = document.getElementById('greet-text');
+  if(el) el.textContent = greet + ', {{ (user.full_name or user.username) | replace("'", "\\'") }}';
+})();
+</script>
+{% endblock %}

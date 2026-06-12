@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% set active_page = 'info' %}
+{% block content %}
+<div class="page-hdr"><h2>Course Information</h2></div>
+
+<style>
+.ci-cards{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:22px;}
+.ci-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:14px 18px;box-shadow:0 1px 6px var(--shadow);display:flex;flex-direction:column;gap:4px;}
+.ci-card-label{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--subtext);}
+.ci-card-value{font-size:14px;font-weight:500;color:var(--text);line-height:1.45;}
+.ci-card-value a{color:var(--navy-mid);text-decoration:underline;word-break:break-all;}
+.ci-card-sub{font-size:11px;color:var(--subtext);margin-top:2px;}
+.ci-card-wide{grid-column:span 2;}
+@media(max-width:540px){.ci-cards{grid-template-columns:1fr;}.ci-card-wide{grid-column:span 1;}}
+</style>
+
+<div class="ci-cards">
+  <div class="ci-card ci-card-wide">
+    <div class="ci-card-label">Course Name</div>
+    <div class="ci-card-value">{{ course.name }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Course Code</div>
+    <div class="ci-card-value">{{ course.code }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Credit</div>
+    <div class="ci-card-value">{{ course.credit or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Instructor</div>
+    <div class="ci-card-value">{{ ((instructor.title + ' ') if instructor and instructor.title else '') + (instructor.full_name or instructor.username) if instructor else '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">E-mail</div>
+    <div class="ci-card-value">{{ course.email or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Office</div>
+    <div class="ci-card-value">{{ course.office or '—' }}</div>
+    {% if course.office_hours %}<div class="ci-card-sub">Hours: {{ course.office_hours }}</div>{% endif %}
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Schedule</div>
+    <div class="ci-card-value">{{ course.schedule or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Classroom</div>
+    <div class="ci-card-value">{{ course.classroom or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Department</div>
+    <div class="ci-card-value">{{ course.department or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Course Category</div>
+    <div class="ci-card-value">{{ course.course_type or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">Delivery</div>
+    <div class="ci-card-value">{{ course.delivery or '—' }}</div>
+  </div>
+  <div class="ci-card">
+    <div class="ci-card-label">CV / Profile</div>
+    <div class="ci-card-value">
+      {% if course.cv_link %}
+        <a href="{{ course.cv_link }}" target="_blank" rel="noopener noreferrer">{{ course.cv_link }}</a>
+      {% else %}—{% endif %}
+    </div>
+  </div>
+</div>
+
+<div style="font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:var(--navy-mid);margin-bottom:10px;margin-top:16px;">Course Overview & Learning Goals</div>
+<div class="section-btn-row">
+  {% for sec in sections %}
+    {% if sec.section_name in ['Prerequisites', 'Course Learning Outcomes', 'Course Objectives', 'Contribution to the Program'] %}
+      <button class="section-btn" onclick="showSection(this, {{ loop.index0 }})" data-index="{{ loop.index0 }}">{{ sec.section_name }}</button>
+    {% endif %}
+  {% endfor %}
+</div>
+
+<div id="section-content-box" style="display:none;margin-top:14px;background:var(--card);border:1.5px solid var(--border);border-radius:12px;padding:16px 20px;">
+  <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--navy-mid);margin-bottom:8px;" id="section-content-title"></div>
+  <div style="font-size:13px;color:var(--text);line-height:1.7;white-space:pre-wrap;" id="section-content-body"></div>
+</div>
+
+<script>
+const sectionData = {
+  {% for sec in sections %}
+    {% if sec.section_name in ['Prerequisites', 'Course Learning Outcomes', 'Course Objectives', 'Contribution to the Program'] %}
+    {{ loop.index0 }}: { title: {{ sec.section_name | tojson }}, body: {{ (sec.content or '—') | tojson }} },
+    {% endif %}
+  {% endfor %}
+};
+function showSection(btn, idx) {
+  const active = document.querySelector('.section-btn.active');
+  if (active && active !== btn) active.classList.remove('active');
+  const box = document.getElementById('section-content-box');
+  if (btn.classList.contains('active')) {
+    btn.classList.remove('active');
+    box.style.display = 'none';
+    return;
+  }
+  btn.classList.add('active');
+  document.getElementById('section-content-title').textContent = sectionData[idx].title;
+  document.getElementById('section-content-body').textContent  = sectionData[idx].body;
+  box.style.display = 'block';
+}
+</script>
+{% endblock %}
