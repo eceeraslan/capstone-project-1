@@ -90,33 +90,35 @@ def _verify_reset_token(token, max_age=RESET_TOKEN_MAX_AGE):
         return None
 
 def _send_reset_email(to_addr, username, reset_url):
-    """Send the reset link via Gmail SMTP. Requires SMTP_USER / SMTP_PASS
-    (a Gmail App Password) in the environment / .env file."""
-    smtp_user = os.environ.get("SMTP_USER")
-    smtp_pass = os.environ.get("SMTP_PASS")
-    smtp_host = os.environ.get("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
-    from_addr = os.environ.get("SMTP_FROM", smtp_user)
+    """Send the reset link via Brevo HTTP API."""
+    import urllib.request, json as _json
+    api_key = os.environ.get("BREVO_API_KEY")
+    sender_email = os.environ.get("SMTP_USER")
+    if not api_key or not sender_email:
+        raise RuntimeError("BREVO_API_KEY / SMTP_USER not configured in environment")
 
-    if not smtp_user or not smtp_pass:
-        raise RuntimeError("SMTP_USER / SMTP_PASS not configured in environment")
+    payload = _json.dumps({
+        "sender": {"name": "BAU Syllabus Platform", "email": sender_email},
+        "to": [{"email": to_addr}],
+        "subject": "Reset your Course Syllabus Platform password",
+        "textContent": (
+            f"Hello {username},\n\n"
+            f"We received a request to reset your password.\n"
+            f"Click the link below to choose a new one (valid for 1 hour):\n\n"
+            f"{reset_url}\n\n"
+            f"If you didn't request this, you can safely ignore this e-mail.\n"
+        ),
+    }).encode("utf-8")
 
-    msg = EmailMessage()
-    msg["Subject"] = "Reset your Course Syllabus Platform password"
-    msg["From"] = from_addr
-    msg["To"] = to_addr
-    msg.set_content(
-        f"Hello {username},\n\n"
-        f"We received a request to reset your password.\n"
-        f"Click the link below to choose a new one (valid for 1 hour):\n\n"
-        f"{reset_url}\n\n"
-        f"If you didn't request this, you can safely ignore this e-mail.\n"
+    req = urllib.request.Request(
+        "https://api.brevo.com/v3/smtp/email",
+        data=payload,
+        headers={"api-key": api_key, "Content-Type": "application/json"},
+        method="POST",
     )
-
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as server:
-        server.starttls()
-        server.login(smtp_user, smtp_pass)
-        server.send_message(msg)
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        if resp.status >= 400:
+            raise RuntimeError(f"Brevo API error: {resp.status}")
 
 # ── AUTH ──────────────────────────────────────────────────────────────────────
 
