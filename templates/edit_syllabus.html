@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% set active_page = 'edit' %}
+{% block content %}
+{% set REQUIRED = [
+  "course overview","prerequisites","course learning outcomes",
+  "course objectives","grading policy","weekly plan","course policies"
+] %}
+<style>
+.sticky-save{position:sticky;top:0;z-index:40;background:var(--card);border:1px solid var(--border);border-radius:10px;padding:10px 16px;margin:0 0 18px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 8px var(--shadow);}
+.sec-hdr-actions{display:flex;gap:6px;align-items:center;}
+.btn-format{background:var(--navy-mid);color:#fff;font-size:11px;padding:4px 10px;border:none;border-radius:6px;cursor:pointer;transition:opacity .15s;}
+.btn-format:hover{opacity:.85;}
+.btn-del{background:transparent;border:1px solid var(--border);color:var(--subtext);border-radius:6px;padding:4px 9px;font-size:11px;cursor:pointer;transition:all .15s;}
+.btn-del:hover{background:#FFEBEE;border-color:var(--red);color:var(--red);}
+.lock-badge{font-size:10px;color:var(--subtext);border:1px solid var(--border);border-radius:6px;padding:3px 8px;display:flex;align-items:center;gap:3px;}
+.sec-card.marked-delete{opacity:.4;outline:2px dashed var(--red);}
+.es-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 14px;background:var(--sky-pale);border:1px solid var(--border);border-radius:10px;margin-bottom:16px;}
+.es-toolbar-label{font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.6px;color:var(--subtext);}
+</style>
+
+<div class="page-hdr">
+  <h2>✏️ Edit Syllabus — {{ course.code }}</h2>
+  <p>Required sections are editable · Custom sections can be deleted · Add new sections</p>
+  {% if courses and courses|length > 1 %}
+  <div class="select-field" style="margin-top:12px;">
+    <label for="course-picker" style="color:#fff;">Düzenlenen ders:</label>
+    <select id="course-picker" class="modern-select"
+      onchange="if(this.value){window.location.href='/course/'+this.value+'/edit';}"
+      style="min-width:260px;">
+      {% for c in courses %}
+      <option value="{{ c.id }}" {% if c.id == course.id %}selected{% endif %}>{{ c.code }} — {{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  {% endif %}
+</div>
+
+<!-- Toolbar: AI tools + history in one clean bar -->
+<div class="es-toolbar">
+  <span class="es-toolbar-label">AI Tools</span>
+  <button type="button" class="btn btn-primary btn-sm" onclick="checkSyllabus()" id="check-btn">
+    🔍 Check Completeness
+  </button>
+  <a href="/course/{{ course.id }}/syllabus/history" class="btn btn-sm"
+     style="background:var(--card);border:1.5px solid var(--border);color:var(--navy-mid);">🕓 Version History</a>
+  <span style="font-size:11px;color:var(--subtext);margin-left:4px;">Each section has ✨ Format with AI</span>
+</div>
+<div id="check-result" style="display:none;margin-bottom:14px;background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;font-size:13px;"></div>
+
+<!-- Fill from file with AI -->
+<div style="background:var(--card);border:1.5px dashed var(--navy-mid);border-radius:12px;padding:16px;margin-bottom:18px;">
+  <h3 style="font-size:12px;font-weight:800;letter-spacing:.6px;color:var(--navy-mid);margin-bottom:6px;">📄 Create Syllabus from File</h3>
+  <p style="font-size:12px;color:var(--subtext);margin-bottom:12px;">
+    Upload your existing syllabus file (PDF, Word or .txt). AI extracts sections and deadlines; fills them in upon your approval.
+  </p>
+  <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+    <input type="file" id="syllabus-file" accept=".pdf,.docx,.txt"
+      style="font-size:12px;color:var(--text);">
+    <button type="button" class="btn btn-primary btn-sm" onclick="extractSyllabus()" id="extract-btn">
+      ✨ Read & Extract with AI
+    </button>
+  </div>
+  <div id="extract-status" style="margin-top:10px;display:none;font-size:12px;"></div>
+  <div id="extract-preview" style="margin-top:12px;display:none;"></div>
+</div>
+
+<form method="POST" action="/course/{{ course.id }}/edit" id="edit-form">
+
+  <!-- Sticky save -->
+  <div class="sticky-save">
+    <button type="submit" class="btn btn-primary">💾 Save</button>
+    <button type="button" class="btn btn-sm" onclick="toggleAddPanel()"
+      style="background:var(--sky-pale);border:1.5px solid var(--border);color:var(--navy-mid);"
+      id="add-toggle-btn" aria-expanded="false">➕ New Section</button>
+    <a href="/course/{{ course.id }}/syllabus" style="color:var(--subtext);text-decoration:none;font-size:13px;">Cancel</a>
+  </div>
+
+  <!-- New section panel (just below the sticky bar) -->
+  <div id="add-panel" style="display:none;background:var(--sky-pale);border:1.5px solid var(--border);border-radius:12px;padding:18px 20px;margin:0 0 18px;">
+    <div style="font-size:12px;font-weight:800;color:var(--navy-mid);letter-spacing:.4px;margin-bottom:14px;">➕ New Section</div>
+    <div style="display:grid;grid-template-columns:1fr 2fr;gap:14px;align-items:start;margin-bottom:14px;">
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--subtext);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Section Title</label>
+        <input type="text" id="new-sec-name" name="new_section_name"
+          placeholder="e.g. Course Materials"
+          style="width:100%;background:var(--input-bg);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;color:var(--text);outline:none;transition:border-color .2s;"
+          onfocus="this.style.borderColor='var(--navy-mid)'" onblur="this.style.borderColor='var(--border)'">
+      </div>
+      <div>
+        <label style="display:block;font-size:11px;font-weight:700;color:var(--subtext);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;">Content</label>
+        <textarea id="new-sec-content" name="new_section_content" rows="4"
+          placeholder="Write section content here…"
+          style="width:100%;background:var(--input-bg);border:1.5px solid var(--border);border-radius:8px;padding:10px 12px;font-size:13px;font-family:inherit;color:var(--text);outline:none;resize:vertical;transition:border-color .2s;"
+          onfocus="this.style.borderColor='var(--navy-mid)'" onblur="this.style.borderColor='var(--border)'"></textarea>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;">
+      <button type="button" class="btn btn-sm" onclick="toggleAddPanel()"
+        style="background:var(--card);border:1.5px solid var(--border);color:var(--subtext);">Cancel</button>
+      <button type="submit" class="btn btn-primary btn-sm">💾 Add & Save</button>
+    </div>
+  </div>
+
+  <!-- Sections -->
+  {% for sec in sections %}
+  {% set is_required = sec.section_name | lower in REQUIRED %}
+  <div class="sec-card" id="card-{{ sec.id }}">
+    <div class="sec-card-hdr">
+      <span>{{ sec.section_name }}</span>
+      <div class="sec-hdr-actions">
+        <button type="button" class="btn-format"
+          onclick="formatSection({{ sec.id }}, '{{ sec.section_name | replace("'","\\'")}}')"
+          aria-label="Format with AI">✨ Format with AI</button>
+        {% if is_required %}
+          <span class="lock-badge" title="This section is required and cannot be deleted">🔒 Required</span>
+        {% else %}
+          <button type="button" class="btn-del" onclick="deleteSection({{ sec.id }}, '{{ sec.section_name | replace("'","\\'") }}')"
+            aria-label="Delete section">🗑 Delete</button>
+        {% endif %}
+      </div>
+    </div>
+    <div class="sec-card-body">
+      <textarea
+        id="ta-{{ sec.id }}"
+        name="section_{{ sec.id }}"
+        rows="6"
+        aria-label="{{ sec.section_name }} content"
+        style="width:100%;padding:10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:inherit;resize:vertical;background:var(--input-bg);box-sizing:border-box;color:var(--text);"
+      >{{ sec.content }}</textarea>
+      <div id="ai-msg-{{ sec.id }}" style="display:none;margin-top:6px;"></div>
+    </div>
+  </div>
+  {% endfor %}
+
+
+</form>
+
+<script>
+function toggleAddPanel() {
+  const panel = document.getElementById('add-panel');
+  const btn   = document.getElementById('add-toggle-btn');
+  const open  = panel.style.display !== 'none';
+  panel.style.display = open ? 'none' : 'block';
+  btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+  if (!open) document.getElementById('new-sec-name').focus();
+}
+
+function deleteSection(secId, secName) {
+  showConfirm({
+    title:    'Delete Section?',
+    body:     '"' + secName + '" will be permanently deleted. You can restore it from Version History.',
+    icon:     '🗑',
+    okLabel:  'Delete',
+    onConfirm: () => doDeleteSection(secId, secName)
+  });
+}
+
+async function doDeleteSection(secId, secName) {
+  const card = document.getElementById('card-' + secId);
+  const btn  = card ? card.querySelector('.btn-del') : null;
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    const res  = await fetch('/course/{{ course.id }}/section/' + secId + '/delete', { method: 'POST' });
+    const data = await res.json();
+    if (data.ok) {
+      card.style.transition = 'opacity .25s, transform .25s';
+      card.style.opacity = '0';
+      card.style.transform = 'translateX(12px)';
+      setTimeout(() => card.remove(), 260);
+      if (typeof showToast === 'function') showToast('🗑 "' + secName + '" deleted.', 'success');
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '🗑 Delete'; }
+      if (typeof showToast === 'function') showToast('❌ ' + data.error, 'error');
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '🗑 Delete'; }
+    if (typeof showToast === 'function') showToast('❌ Connection error.', 'error');
+  }
+}
+
+async function formatSection(secId, sectionName) {
+  const ta  = document.getElementById('ta-' + secId);
+  const msg = document.getElementById('ai-msg-' + secId);
+  const content = ta.value.trim();
+  if (!content) { alert('Content is empty, cannot format.'); return; }
+  msg.style.display = 'block';
+  msg.innerHTML = '<span style="color:var(--subtext);font-size:12px;">⏳ AI formatting...</span>';
+  try {
+    const res = await fetch('/ai/format-section', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({section_name: sectionName, content: content})
+    });
+    const data = await res.json();
+    if (data.ok) {
+      ta.value = data.formatted;
+      msg.innerHTML = '<span style="color:var(--green);font-size:12px;">✅ Formatted — use the 💾 Save button to save.</span>';
+    } else {
+      msg.innerHTML = '<span style="color:var(--red);font-size:12px;">Error: ' + (data.error||'Unknown') + '</span>';
+    }
+  } catch(e) {
+    msg.innerHTML = '<span style="color:var(--red);font-size:12px;">Connection error.</span>';
+  }
+}
+
+let extractedData = null;
+
+async function extractSyllabus() {
+  const fileInput = document.getElementById('syllabus-file');
+  const status  = document.getElementById('extract-status');
+  const preview = document.getElementById('extract-preview');
+  const btn = document.getElementById('extract-btn');
+  if (!fileInput.files || !fileInput.files[0]) {
+    alert('Please select a file first (PDF, Word or .txt).');
+    return;
+  }
+  const fd = new FormData();
+  fd.append('file', fileInput.files[0]);
+  btn.disabled = true; btn.textContent = '⏳ Reading...';
+  status.style.display = 'block';
+  status.innerHTML = '<span style="color:var(--subtext);">Reading file and AI is analyzing, this may take a moment...</span>';
+  preview.style.display = 'none'; preview.innerHTML = '';
+  try {
+    const res = await fetch('/course/{{ course.id }}/syllabus/extract', { method:'POST', body: fd });
+    const data = await res.json();
+    if (data.ok) {
+      extractedData = { sections: data.sections || [], deadlines: data.deadlines || [] };
+      status.style.display = 'none';
+      renderPreview();
+    } else {
+      status.innerHTML = '<span style="color:var(--red);">Error: ' + (data.error || 'Unknown') + '</span>';
+    }
+  } catch(e) {
+    status.innerHTML = '<span style="color:var(--red);">Connection error.</span>';
+  }
+  btn.disabled = false; btn.textContent = '✨ Read & Extract with AI';
+}
+
+function escapeHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderPreview() {
+  const preview = document.getElementById('extract-preview');
+  const secs = extractedData.sections, dls = extractedData.deadlines;
+  if (secs.length === 0 && dls.length === 0) {
+    preview.style.display = 'block';
+    preview.innerHTML = '<span style="color:#E65100;font-size:12px;">AI could not extract any recognizable sections or dates from the file.</span>';
+    return;
+  }
+  let html = '<div style="border-top:1px solid var(--border);padding-top:12px;">';
+  html += '<div style="font-size:12px;font-weight:800;color:var(--navy-mid);margin-bottom:8px;">🔍 AI Preview — not saved until you confirm</div>';
+  if (secs.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--subtext);text-transform:uppercase;margin-bottom:6px;">Sections (' + secs.length + ')</div>';
+    secs.forEach(s => {
+      const preview_text = escapeHtml((s.content||'').slice(0,160)) + ((s.content||'').length>160 ? '…' : '');
+      html += '<div style="background:var(--sky-pale);border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin-bottom:6px;">'
+            + '<div style="font-size:12px;font-weight:700;color:var(--text);">' + escapeHtml(s.name) + '</div>'
+            + '<div style="font-size:11px;color:var(--subtext);margin-top:2px;">' + preview_text + '</div></div>';
+    });
+  }
+  if (dls.length) {
+    html += '<div style="font-size:11px;font-weight:700;color:var(--subtext);text-transform:uppercase;margin:10px 0 6px;">Deadlines (' + dls.length + ')</div>';
+    dls.forEach(d => {
+      html += '<div style="font-size:12px;color:var(--text);padding:3px 0;">📅 <strong>' + escapeHtml(d.title) + '</strong> — ' + escapeHtml(d.date) + '</div>';
+    });
+  }
+  html += '<div style="display:flex;gap:10px;margin-top:14px;">'
+        + '<button type="button" class="btn btn-primary btn-sm" onclick="applyExtracted()" id="apply-btn">✓ Confirm & Fill</button>'
+        + '<button type="button" class="btn btn-sm" onclick="cancelExtract()" style="background:var(--card);border:1.5px solid var(--border);color:var(--subtext);">Cancel</button>'
+        + '</div></div>';
+  preview.style.display = 'block';
+  preview.innerHTML = html;
+}
+
+function cancelExtract() {
+  extractedData = null;
+  document.getElementById('extract-preview').style.display = 'none';
+  document.getElementById('extract-preview').innerHTML = '';
+}
+
+async function applyExtracted() {
+  if (!extractedData) return;
+  const btn = document.getElementById('apply-btn');
+  btn.disabled = true; btn.textContent = '⏳ Saving...';
+  try {
+    const res = await fetch('/course/{{ course.id }}/syllabus/apply-extracted', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(extractedData)
+    });
+    const data = await res.json();
+    if (data.ok) {
+      alert('✅ ' + data.sections + ' section(s) and ' + data.deadlines + ' deadline(s) saved. Reloading...');
+      location.reload();
+    } else {
+      alert('Error: ' + (data.error || 'Unknown'));
+      btn.disabled = false; btn.textContent = '✓ Confirm & Fill';
+    }
+  } catch(e) {
+    alert('Connection error.');
+    btn.disabled = false; btn.textContent = '✓ Confirm & Fill';
+  }
+}
+
+async function checkSyllabus() {
+  const btn = document.getElementById('check-btn');
+  const res_div = document.getElementById('check-result');
+  btn.disabled = true; btn.textContent = '⏳ Checking...';
+  res_div.style.display = 'block';
+  res_div.innerHTML = '<span style="color:var(--subtext);font-size:12px;">AI is analyzing...</span>';
+  try {
+    const res = await fetch('/course/{{ course.id }}/ai/check-syllabus');
+    const data = await res.json();
+    if (data.ok) {
+      let html = '';
+      const hasMissing = data.missing && data.missing.length > 0;
+      const hasWeak    = data.weak    && data.weak.length    > 0;
+      if (!hasMissing && !hasWeak) {
+        html = '<span style="color:var(--green);font-size:13px;font-weight:700;">✅ The syllabus looks complete!</span>';
+      } else {
+        if (hasMissing) {
+          html += '<div style="margin-bottom:8px;"><strong style="color:var(--red);font-size:12px;">❌ Missing sections:</strong><ul style="margin:4px 0 0 16px;font-size:12px;">';
+          data.missing.forEach(m => { html += '<li>' + m + '</li>'; });
+          html += '</ul></div>';
+        }
+        if (hasWeak) {
+          html += '<div><strong style="color:#E65100;font-size:12px;">⚠️ Sections with very short content:</strong><ul style="margin:4px 0 0 16px;font-size:12px;">';
+          data.weak.forEach(w => { html += '<li>' + w + '</li>'; });
+          html += '</ul></div>';
+        }
+      }
+      res_div.innerHTML = html;
+    } else {
+      res_div.innerHTML = '<span style="color:var(--red);font-size:12px;">Error: ' + (data.error||'') + '</span>';
+    }
+  } catch(e) {
+    res_div.innerHTML = '<span style="color:var(--red);font-size:12px;">Connection error.</span>';
+  }
+  btn.disabled = false; btn.textContent = '🔍 Check for Missing Components';
+}
+</script>
+{% endblock %}

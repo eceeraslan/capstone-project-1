@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% set active_page = 'history' %}
+{% block content %}
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for category, message in messages %}
+    <div class="flash {{ category }}" role="alert">{{ message }}</div>
+  {% endfor %}
+{% endwith %}
+<div class="page-hdr">
+  <h2>🕓 Version History — {{ course.code }}</h2>
+  <p>Full change log per section — restore any previous version</p>
+</div>
+
+<div style="margin-bottom:14px;">
+  <a href="/course/{{ course.id }}/edit" class="btn btn-sm" style="background:var(--card);border:1.5px solid var(--border);color:var(--navy-mid);">← Back to Edit</a>
+</div>
+
+{% if history %}
+{% set ns = namespace(sections_seen=[]) %}
+{% for h in history %}
+  {% if h.section_name not in ns.sections_seen %}
+    {% set _ = ns.sections_seen.append(h.section_name) %}
+
+    {# Collect all entries for this section #}
+    {% set section_entries = history | selectattr("section_name", "equalto", h.section_name) | list %}
+
+    <div class="sec-card" style="margin-bottom:16px;">
+      <div class="sec-card-hdr" style="display:flex;align-items:center;justify-content:space-between;">
+        <span>{{ h.section_name }}</span>
+        <span style="font-size:10px;color:var(--subtext);font-weight:600;">{{ section_entries | length }} version{{ 's' if section_entries | length != 1 else '' }}</span>
+      </div>
+
+      {% for entry in section_entries %}
+      <div style="border-bottom:1px solid var(--border);padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-wrap:wrap;gap:8px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span style="font-size:11px;font-weight:800;color:var(--navy-mid);background:var(--sky-pale);border-radius:5px;padding:2px 7px;">
+              v{{ section_entries | length - loop.index0 }}
+            </span>
+            <span style="font-size:11px;color:var(--subtext);">
+              {{ entry.changed_at[:16] if entry.changed_at else '' }} · {{ entry.username }}
+            </span>
+          </div>
+          <form method="POST" action="/course/{{ course.id }}/syllabus/section/{{ entry.section_id }}/restore">
+            <input type="hidden" name="hist_id" value="{{ entry.id }}">
+            <button type="submit" class="btn btn-sm"
+              style="font-size:11px;background:var(--sky-pale);color:var(--navy-mid);border:1px solid var(--border);"
+              aria-label="Restore version {{ section_entries | length - loop.index0 }}"
+              onclick="return confirm('Restore this version of &quot;{{ entry.section_name }}&quot;?')">
+              ↩️ Restore
+            </button>
+          </form>
+        </div>
+        <pre style="font-size:12px;color:var(--text);line-height:1.6;white-space:pre-wrap;background:var(--sky-pale);border-radius:6px;padding:10px;max-height:160px;overflow-y:auto;margin:0;">{{ entry.content or '(empty)' }}</pre>
+      </div>
+      {% endfor %}
+
+    </div>
+  {% endif %}
+{% endfor %}
+{% else %}
+<div class="empty-state">
+  <div class="big">🕓</div>
+  No change history yet. It will appear here after your first save.
+</div>
+{% endif %}
+{% endblock %}
